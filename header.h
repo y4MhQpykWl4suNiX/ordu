@@ -38,7 +38,7 @@
 
 using namespace std;
 
-#define MAXPTS 10000001  // macro define the maximum number of points
+#define MAXPTS 50000001  // macro define the maximum number of points
 #define MB 1048576      // macro define the size of MB
 
 #ifdef DEBUG

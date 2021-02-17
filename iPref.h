@@ -35,7 +35,7 @@ bool sortbysec(const pair<long int, float> &a, const pair<long int, float> &b);
 
 // optimized algorithm
 float computeRho(const int dimen, const int k, const int X, vector<float>& userpref, Rtree& a_rtree, float* PG[],
-         vector<pair<long int, float>> &interval, float radius = INFINITY);
+                 vector<pair<long int, float>> &interval, float radius = INFINITY);
 
 // unknown x baseline
 float computeRho_unknownX_basic(const int dimen, const int k, const int X, vector<float>& userpref, Rtree& a_rtree, float** PG);
@@ -153,12 +153,23 @@ public:
 
 
 int utk_efficient(float **PointSet, int dim, vector<float> &w, Rtree* rtree, int X, int k,
-                   vector<pair<int, double>> &utk_option_ret,
-                   vector<pair<double, region*>> &utk_cones_ret);
+                  vector<pair<int, double>> &utk_option_ret,
+                  vector<pair<double, region*>> &utk_cones_ret);
 
 vector<vector<double>> points_to_halfspace(vector<vector<double>> &points);
 
 int utk_efficient_anti(float **PointSet, int dim, vector<float> &w, Rtree* rtree, int X, int k,
                        vector<pair<int, double>> &utk_option_ret,
                        vector<pair<double, region*>> &utk_cones_ret);
+
+int utk_efficient_cs3(float **PointSet, int dim, vector<float> &w, Rtree* rtree, int X, int k,
+                      vector<pair<int, double>> &utk_option_ret,
+                      vector<pair<double, region*>> &utk_cones_ret, double &rho_star);
+
+int utk_efficient3(float **PointSet, int dim, vector<float> &w, Rtree* rtree, int X, int k,
+                   vector<pair<int, double>> &utk_option_ret,
+                   vector<pair<double, region*>> &utk_cones_ret);
+int non_order_utk_efficient(float **PointSet, int dim, vector<float> &w, Rtree* rtree, int X, int k,
+                            vector<pair<int, double>> &utk_option_ret,
+                            vector<pair<double, region*>> &utk_cones_ret, float rho=INFINITY);
 #endif

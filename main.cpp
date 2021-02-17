@@ -29,119 +29,131 @@ double treeSpacecost = 0.0;
 double Spacecost = 0.0;
 clock_t at, ad;
 
+extern double ord_m_t;
+extern double rho_star_t;
+extern double rskyband_t;
+extern double ch_1_t;
+extern double rec_oru_t;
+
 int main(const int argc, const char** argv)
 {
-	cout.precision(6);
-	cout << "iPref Problem (Size-constrained R-kSkyband/UTK )" << endl;
-	clock_t at, ad;
+    cout.precision(6);
+    cout << "iPref Problem (Size-constrained R-kSkyband/UTK )" << endl;
+    clock_t at, ad;
 
-	// parameter parser
-	cout << "Parse Parameters" << endl;
-	if (argc == 1)
-	{
-		helpmsg(argv[0]);
-		return -1;
-	}
+    // parameter parser
+    cout << "Parse Parameters" << endl;
+    if (argc == 1)
+    {
+        helpmsg(argv[0]);
+        return -1;
+    }
     const int k = atoi(Param::read(argc, argv, "-k", ""));
-	int dim = atoi(Param::read(argc, argv, "-d", ""));
-	const char* datafile = Param::read(argc, argv, "-f", "");
-	const char* indexfile = Param::read(argc, argv, "-i", "");
-	const int X = atoi(Param::read(argc, argv, "-X", ""));
-	const char* methodName = Param::read(argc, argv, "-m", "");
+    int dim = atoi(Param::read(argc, argv, "-d", ""));
+    const char* datafile = Param::read(argc, argv, "-f", "");  // option file name
+    const char* indexfile = Param::read(argc, argv, "-i", "");
+    const int X = atoi(Param::read(argc, argv, "-X", "")); // TODO change its name to m
+    const char* methodName = Param::read(argc, argv, "-m", "");
     int w_num = atoi(Param::read(argc, argv, "-w", "")); // the number of tested user weights
-    int n=atoi(Param::read(argc, argv, "-n", ""));
-//    write file format:
-//      <k1, w_11, w_12, w_13, ..., w_1d>
-//      <k2, w_21, w_22, w_23, ..., w_2d>
+    int n=atoi(Param::read(argc, argv, "-n", "")); //  TODO discard
+//    product file format:
+//      <id1 w_11 w_12 w_13 ... w_1d>
+//      <id2 w_21 w_22 w_23 ... w_2d>
 //      ...
-//      <kn, w_n1, w_n2, w_n3, ..., w_nd>
+//      <idn w_n1 w_n2 w_n3 ... w_nd>
+
+//    user file format:
+//      <w_11 w_12 w_13 ... w_1d>
+//      <w_21 w_22 w_23 ... w_2d>
+//      ...
+//      <w_n1 w_n2 w_n3 ... w_nd>
     const char *w_file = Param::read(argc, argv, "-W", "");
 
-    vector<vector<float>> ws(w_num, vector<float>(dim));
-    vector<int> ks(w_num);
-	fstream fpdata;
+    vector<vector<float>> ws(w_num*3, vector<float>(dim));
+    vector<int> ks(w_num*3);
+    fstream fpdata;
     fpdata.open(w_file, ios::in);
     for (int i = 0; i < ws.size(); ++i) {
-//        fpdata >> ks[i];
         ks[i]=k;
         for (int j = 0; j < ws[i].size(); ++j) {
             fpdata >> ws[i][j];
         }
     }
-    fpdata.close();
+    fpdata.close(); // in case of memory leaking
 
 
     int resultSize = 0;
-	// data loading
-	cout << "Load data points from file" << endl;
-	float** PointSet = new float*[MAXPTS + 1];
-	RtreeNodeEntry** p = new RtreeNodeEntry*[MAXPTS];
-	fpdata.open(datafile, ios::in);
+    // data loading
+    cout << "Load data points from file" << endl;
+    float** PointSet = new float*[MAXPTS + 1];
+    RtreeNodeEntry** p = new RtreeNodeEntry*[MAXPTS];
+    fpdata.open(datafile, ios::in);
 
-	while (n--) // TODO modify
-	{
-		int id;
-		float* cl = new float[dim];
-		float* cu = new float[dim];
-		fpdata >> id;
-		if (fpdata.eof())
-			break;
+    while (n--) // TODO modify
+    {
+        int id;
+        float* cl = new float[dim];
+        float* cu = new float[dim];
+        fpdata >> id;
+        if (fpdata.eof())
+            break;
 
-		PointSet[objCnt + 1] = new float[2 * dim];
+        PointSet[objCnt + 1] = new float[2 * dim];
 
-		for (int d = 0; d < dim; d++)
-		{
-			fpdata >> cl[d];
+        for (int d = 0; d < dim; d++)
+        {
+            fpdata >> cl[d];
             PointSet[objCnt + 1][d] = cl[d];
         }
 
-		for (int d = 0; d < dim; d++)
-		{
-			fpdata >> cu[d];
-			PointSet[objCnt + 1][d + dim] = cu[d];
+        for (int d = 0; d < dim; d++)
+        {
+            fpdata >> cu[d];
+            PointSet[objCnt + 1][d + dim] = cu[d];
         }
 
-		Hypercube hc(dim, cl, cu);
-		p[objCnt++] = new RtreeNodeEntry(id, hc);
+        Hypercube hc(dim, cl, cu);
+        p[objCnt++] = new RtreeNodeEntry(id, hc);
 
-		//log information
-		if (objCnt % 1000 == 0)
-			cout << ".";
-		if (objCnt % 10000 == 0)
-			cout << objCnt << " objects loaded" << endl;
-	}
+        //log information
+        if (objCnt % 1000 == 0)
+            cout << ".";
+        if (objCnt % 10000 == 0)
+            cout << objCnt << " objects loaded" << endl;
+    }
 
-	double rawSize = dataSize(objCnt, dim);
-	cout << "Total number of objects: " << objCnt << endl;
-	totalSpaceCost += rawSize;
+    double rawSize = dataSize(objCnt, dim);
+    cout << "Total number of objects: " << objCnt << endl;
+    totalSpaceCost += rawSize;
 
-	// build rtree
-	cout << "Bulkloading R-tree..." << endl;
-	const int maxChild = (PAGESIZE - RtreeNode::size()) / RtreeNodeEntry::size(dim);
-	FileMemory mem(PAGESIZE, indexfile, RtreeNodeEntry::fromMem, true);
-	Rtree* rtree = TGS::bulkload(mem, dim, maxChild, maxChild, (int)maxChild*0.3, (int)maxChild*0.3, p, objCnt, false);
-	cout << "[Rtree build done]" << endl;
+    // build rtree
+    cout << "Bulkloading R-tree..." << endl;
+    const int maxChild = (PAGESIZE - RtreeNode::size()) / RtreeNodeEntry::size(dim);
+    FileMemory mem(PAGESIZE, indexfile, RtreeNodeEntry::fromMem, true);
+    Rtree* rtree = TGS::bulkload(mem, dim, maxChild, maxChild, (int)maxChild*0.3, (int)maxChild*0.3, p, objCnt, false);
+    cout << "[Rtree build done]" << endl;
 
-	// in-memory rtree
-	cout << "cache R-tree into memory" << endl;
-	rtreeRAM(*rtree, ramTree);
-	totalSpaceCost += ramTree.size()*4096.00 / MB;
-	cout << "Total R-tree size:" << totalSpaceCost << "MB" << endl;
+    // in-memory rtree
+    cout << "cache R-tree into memory" << endl;
+    rtreeRAM(*rtree, ramTree);
+    totalSpaceCost += ramTree.size()*4096.00 / MB;
+    cout << "Total R-tree size:" << totalSpaceCost << "MB" << endl;
 
-	// aggregate rtree
-	aggregateRecords(*rtree);
-	cout << "[Aggregate Rtree done]" << endl;
+    // aggregate rtree
+    aggregateRecords(*rtree);
+    cout << "[Aggregate Rtree done]" << endl;
+    // init qp solver
     qp=qp_solver(dim);
     g_r_domain_vec=gen_r_domain_vec(dim);
     if (strcmp(methodName, "BB") == 0)
-	{
-		// baseline algorithm
-		// (1) compute k-skyband set SK
-		// (2) for each pi, suppose T_pi is the incomparable set (a) p_j is incomparable with p_i in SK, (2) p_j w > p_i w
-		// (3) for each p in T_pi, compute the distance from point w to hyperplane H_{i,j} equation: d = \frac{a1 w1 +  a2 w2 + ... ad_1 wd-1+D}{\sqrt{a1^2+a2^2+ ... + ad-1^2}}
-		// (4) compute the inflection point of pi: the k-th laregst value in step (3), denotes as inf_pi
-		// (5) pi's rksykband interval: inf_pi to infinity
-		// (6) the radius rho is the T-th minimum value in all pi in SK
+    {
+        // ORD knownX baseline algorithm
+        // (1) compute k-skyband set SK
+        // (2) for each pi, suppose T_pi is the incomparable set (a) p_j is incomparable with p_i in SK, (2) p_j w > p_i w
+        // (3) for each p in T_pi, compute the distance from point w to hyperplane H_{i,j} equation: d = \frac{a1 w1 +  a2 w2 + ... ad_1 wd-1+D}{\sqrt{a1^2+a2^2+ ... + ad-1^2}}
+        // (4) compute the inflection point of pi: the k-th laregst value in step (3), denotes as inf_pi
+        // (5) pi's rksykband interval: inf_pi to infinity
+        // (6) the radius rho is the T-th minimum value in all pi in SK
         int k=ks[0];
         clock_t bat = clock();
         vector<long int> skyband;
@@ -155,55 +167,55 @@ int main(const int argc, const char** argv)
         clock_t bad = clock();
         cout << "Total time cost: " << fixed << (bad - bat) * 1.0 / (CLOCKS_PER_SEC) << " SEC " << endl;
         for (int wi = 0; wi < w_num; wi++)
-		{
-			// weight vector for testing, we should remove the redundant one
+        {
+            // weight vector for testing, we should remove the redundant one
             auto wbegin = chrono::steady_clock::now();
 
             vector<float> w(ws[wi].begin(), ws[wi].end());
 
-			cout << "Testing w: ";
-			for (int di = 0; di < dim-1; di++)
-			{
-				cout << w[di] << ", ";
-			}
-			cout<< w.back() <<endl;
+            cout << "Testing w: ";
+            for (int di = 0; di < dim-1; di++)
+            {
+                cout << w[di] << ", ";
+            }
+            cout<< w.back() <<endl;
             cout << "Testing k: " << k <<endl;
-			//k-skyband
-			vector<long int> topKRet = computeTopK(dim, PointSet, skyband, w, k);
-			assert(topKRet.size() == k);
-			vector<pair<long int, float>> interval;
-			for (int i = 0; i < topKRet.size(); i++) {
-				interval.emplace_back(topKRet[i], 0);
-			}
+            //k-skyband
+            vector<long int> topKRet = computeTopK(dim, PointSet, skyband, w, k);
+            assert(topKRet.size() == k);
+            vector<pair<long int, float>> interval;
+            for (int i = 0; i < topKRet.size(); i++) {
+                interval.emplace_back(topKRet[i], 0);
+            }
 
-			for (int ski = 0; ski < skyband.size(); ski++)
-			{
-				if (find(topKRet.begin(), topKRet.end(), skyband[ski]) != topKRet.end())
-				{
-					continue;
-				}
-				multiset<float> radiusSKI;
-				vector<long int> incompset;
-				vector<long int> dominatorSet;
-				int dominated_cnt=0;
-				for (int pj = 0; pj < skyband.size(); pj++)
-				{
-					if (ski == pj)
-						continue;
-					if (IsPjdominatePi(dim, PointSet, skyband[ski], skyband[pj]))
-					{
-						radiusSKI.insert(INFINITY);
+            for (int ski = 0; ski < skyband.size(); ski++)
+            {
+                if (find(topKRet.begin(), topKRet.end(), skyband[ski]) != topKRet.end())
+                {
+                    continue;
+                }
+                multiset<float> radiusSKI;
+                vector<long int> incompset;
+                vector<long int> dominatorSet;
+                int dominated_cnt=0;
+                for (int pj = 0; pj < skyband.size(); pj++)
+                {
+                    if (ski == pj)
+                        continue;
+                    if (IsPjdominatePi(dim, PointSet, skyband[ski], skyband[pj]))
+                    {
+                        radiusSKI.insert(INFINITY);
                         dominated_cnt++;
-						if(dominated_cnt>=k)
-						    break;
-					}
-					else if (incomparableset(PointSet, skyband[ski], skyband[pj], w)) // step (2)
-					{
-						incompset.push_back(skyband[pj]);
-					}
-				}
+                        if(dominated_cnt>=k)
+                            break;
+                    }
+                    else if (incomparableset(PointSet, skyband[ski], skyband[pj], w)) // step (2)
+                    {
+                        incompset.push_back(skyband[pj]);
+                    }
+                }
 
-				// here we need a function to compute the inflection radius of option pi
+                // here we need a function to compute the inflection radius of option pi
                 if(dominated_cnt>=k){
                     interval.emplace_back(skyband[ski], INFINITY);
                     continue;
@@ -211,87 +223,84 @@ int main(const int argc, const char** argv)
                 while(radiusSKI.size()>k){
                     radiusSKI.erase(radiusSKI.begin());
                 }
-				for (int inpi = 0; inpi < incompset.size(); inpi++)
-				{
-					vector<float> tmpHS = computePairHP(dim, PointSet, skyband[ski], incompset[inpi]);
-					//compute the distance from w to hyperplane.
-					float tmpDis = computeDis(tmpHS, w);
-					radiusSKI.insert(tmpDis);
-					if(radiusSKI.size()>k){
-					    radiusSKI.erase(radiusSKI.begin());
-					    if(*radiusSKI.begin()==INFINITY){
+                for (int inpi = 0; inpi < incompset.size(); inpi++)
+                {
+                    vector<float> tmpHS = computePairHP(dim, PointSet, skyband[ski], incompset[inpi]);
+                    //compute the distance from w to hyperplane.
+                    float tmpDis = computeDis(tmpHS, w);
+                    radiusSKI.insert(tmpDis);
+                    if(radiusSKI.size()>k){
+                        radiusSKI.erase(radiusSKI.begin());
+                        if(*radiusSKI.begin()==INFINITY){
                             break;
                         }
-					}
-				}
-				if(*radiusSKI.begin()==INFINITY){
+                    }
+                }
+                if(*radiusSKI.begin()==INFINITY){
                     interval.emplace_back(skyband[ski], INFINITY);
                 }else{
                     assert(radiusSKI.size() >= k);
                     interval.emplace_back(skyband[ski], *radiusSKI.begin());
-				}
-			}
-			sort(interval.begin(), interval.end(), sortbysec);
-			for (auto i = 0; i < k; ++i) {
-				interval[i].first = topKRet[i];
-			}
-			cout << "The inflection radius is: " << interval[X].second << endl;
+                }
+            }
+            sort(interval.begin(), interval.end(), sortbysec);
+            for (auto i = 0; i < k; ++i) {
+                interval[i].first = topKRet[i];
+            }
+            cout << "The inflection radius is: " << interval[X].second << endl;
             auto now = chrono::steady_clock::now();
             chrono::duration<double> elapsed_seconds= (now-wbegin)+(kend-kbegin);
             cout << "Total time cost: " << elapsed_seconds.count()<< " SEC " << endl;
-		}
-		ad = clock();
+        }
+        ad = clock();
         auto now = chrono::steady_clock::now();
         chrono::duration<double> elapsed_seconds= (now-begin)/w_num+(kend-kbegin);
         cout << "Total time cost: " << elapsed_seconds.count()<< " SEC " << endl;
-	}
-	if (strcmp(methodName, "OA") == 0)
-	{
-		// optimized algorithm
-		// (1) revised BBS for w, compute top-k result, store in T directly
-		// (2) for each pi (uncertain status), compute its inflection distance inf_pi, and push it into a max-heap Q (inf_pi as key)
-		// (3) keep fetching until max-heap with size X-k+1, pop the top node out, and initalize p0 = inf_ptop
-		// (4) test the rest candidates by r-dominanace, instead of BBS, thus fetching r-skyband options
-		// (5) shrinks p0 quicly, simulating a scanning from infinity to 0
-		// (6) fetching terminates none of options can be the r-skyband
-		// (7) append Q to T, this is the final result.
+    }
+    if (strcmp(methodName, "OA") == 0)
+    {
+        // ORD knownX optimized algorithm
+        // (1) revised BBS for w, compute top-k result, store in T directly
+        // (2) for each pi (uncertain status), compute its inflection distance inf_pi, and push it into a max-heap Q (inf_pi as key)
+        // (3) keep fetching until max-heap with size X-k+1, pop the top node out, and initalize p0 = inf_ptop
+        // (4) test the rest candidates by r-dominanace, instead of BBS, thus fetching r-skyband options
+        // (5) shrinks p0 quicly, simulating a scanning from infinity to 0
+        // (6) fetching terminates none of options can be the r-skyband
+        // (7) append Q to T, this is the final result.
         vector<pair<long int, float>> interval;
-		at = clock();
+        at = clock();
         auto begin = chrono::steady_clock::now();
-		for (int wi = 0; wi < w_num; wi++)
-		{
+        for (int wi = 0; wi < w_num; wi++)
+        {
             clock_t wat = clock();
             auto wbegin = chrono::steady_clock::now();
 
             int k=ks[wi];
             // weight vector for testing, we should remove the redundant one
-			vector<float> w(ws[wi].begin(), ws[wi].end());
+            vector<float> w(ws[wi].begin(), ws[wi].end());
 
-			cout << "Testing w: ";
-			for (int di = 0; di < dim-1; di++)
-			{
-				cout << w[di] << ", ";
-			}
-			cout <<w.back()<< endl;
-			float rho = computeRho(dim, k, X, w, *rtree, PointSet, interval);
-			interval.clear();
-			cout << "The inflection radius is: " << rho << endl;
+            cout << "Testing w: ";
+            for (int di = 0; di < dim-1; di++)
+            {
+                cout << w[di] << ", ";
+            }
+            cout <<w.back()<< endl;
+            float rho = computeRho(dim, k, X, w, *rtree, PointSet, interval);
+            interval.clear();
+            cout << "The inflection radius is: " << rho << endl;
             ad = clock();
             cout << "Total time cost: " << fixed << (ad - wat) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << "\n";
             auto now = chrono::steady_clock::now();
             chrono::duration<double> elapsed_seconds= now-wbegin;
             cout << elapsed_seconds.count() <<endl;
-		}
-		ad = clock();
-		cout << "Total time cost: " << fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << "\n";
+        }
+        ad = clock();
+        cout << "Total time cost: " << fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << "\n";
         auto now = chrono::steady_clock::now();
         chrono::duration<double> elapsed_seconds= now-begin;
         cout << elapsed_seconds.count()/w_num <<endl;
-	}
-	// inclremental version, without known X
-	// We do not have exact X, we need tell the user the radius rho and its corresponding T
-	// It is similar to optimized algorithm, however, it computes incrementally, from rho = 0 to infinity, the size T is from k to k-skyband.
-    if (strcmp(methodName, "UB") == 0) // unknown X basic
+    }
+    if (strcmp(methodName, "UB") == 0) // ORD unknown X basic
     {
         // (1) if get_next_time<=k, from BBS fetch topK
         // (2) for each element in BBS, calculate their inflection radius and store them into heap S (so we can know whose inflection radius is smallest)
@@ -322,7 +331,7 @@ int main(const int argc, const char** argv)
         ad = clock();
         cout << "Total time cost: " << fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << endl;
     }
-    if (strcmp(methodName, "UB_GN") == 0) // unknown X baseline get_next version
+    if (strcmp(methodName, "UB_GN") == 0) // ORD unknown X baseline get_next version
     {
         at = clock();
         auto begin = chrono::steady_clock::now();
@@ -366,7 +375,7 @@ int main(const int argc, const char** argv)
         auto now = chrono::steady_clock::now();
         chrono::duration<double> elapsed_seconds= now-begin;
     }
-    // inclremental version, without known X
+    // incremental version, without known X
     // We do not have exact X, we need tell the user the radius rho and its corresponding T
     // It is similar to optimized algorithm, however, it computes incrementally, from rho = 0 to infinity, the size T is from k to k-skyband.
     if (strcmp(methodName, "UA") == 0) // unknown X efficient
@@ -440,7 +449,7 @@ int main(const int argc, const char** argv)
         auto now = chrono::steady_clock::now();
         chrono::duration<double> elapsed_seconds= now-begin;
     }
-    if (strcmp(methodName, "UTK_BB") == 0) // utk baseline
+    if (strcmp(methodName, "UTK_BB") == 0) // ORU baseline
     {
         at = clock();
         auto begin = chrono::steady_clock::now();
@@ -472,7 +481,7 @@ int main(const int argc, const char** argv)
     }
     double avg_rt_cnt=0;
     double avg_rr_cnt=0;
-    if (strcmp(methodName, "UTK_OA") == 0) // utk efficient
+    if (strcmp(methodName, "UTK_OA") == 0) // ORU efficient
     {
         at = clock();
         auto begin = chrono::steady_clock::now();
@@ -492,6 +501,7 @@ int main(const int argc, const char** argv)
             cout <<w.back()<< endl;
             vector<pair<int, double>> utk_option_ret;
             vector<pair<double, region*>> utk_cones_ret;
+            // the code commented below just for anti data
 //            int generated_r_cnt= utk_efficient_anti(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret);
             int generated_r_cnt= utk_efficient(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret);
             avg_rt_cnt+=generated_r_cnt;
@@ -523,6 +533,73 @@ int main(const int argc, const char** argv)
         }
         auto now = chrono::steady_clock::now();
         chrono::duration<double> elapsed_seconds= now-begin;
+        cout<<elapsed_seconds.count();
+
+        cout<<"output time stat:\n";
+        rec_oru_t-=ch_1_t;
+        ch_1_t-=rskyband_t;
+        rskyband_t-=rho_star_t;
+        rho_star_t-=ord_m_t;
+        cout<<ord_m_t/w_num<<endl;
+        cout<<rho_star_t/w_num<<endl;
+        cout<<rskyband_t/w_num<<endl;
+        cout<<ch_1_t/w_num<<endl;
+        cout<<rec_oru_t/w_num<<endl;
+
+    }
+    if (strcmp(methodName, "UTK_OA3") == 0) // ORU efficient
+    {
+        at = clock();
+        auto begin = chrono::steady_clock::now();
+        vector<double> avg_time(X);
+        vector<float> avg_radius(X, 0.0);
+        for (int wi = 0; wi < w_num; wi++)
+        {
+            auto w_begin = chrono::steady_clock::now();
+            int k=ks[wi];
+            // weight vector for testing, we should remove the redundant one
+            vector<float> w(ws[wi].begin(), ws[wi].end());
+            cout << "Testing w: ";
+            for (int di = 0; di < dim-1; di++)
+            {
+                cout << w[di] << ", ";
+            }
+            cout <<w.back()<< endl;
+            vector<pair<int, double>> utk_option_ret;
+            vector<pair<double, region*>> utk_cones_ret;
+            // the code commented below just for anti data
+//            int generated_r_cnt= utk_efficient_anti(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret);
+            int generated_r_cnt= utk_efficient3(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret);
+            avg_rt_cnt+=generated_r_cnt;
+            avg_rr_cnt+=utk_cones_ret.size();
+            cout<<"ret size: "<<utk_option_ret.size()<<"\n";
+            for (int i = 0; i < avg_radius.size(); ++i) {
+                if(i<utk_option_ret.size()){
+                    avg_radius[i]+=utk_option_ret[i].second;
+                }else{
+                    avg_radius[i]+=1000000;
+                }
+            }
+            for (float radius:avg_radius) {
+                cout<<radius/(wi+1)<<endl;
+            }
+            double rho = utk_option_ret.back().second;
+            for (pair<double, region*> &tmp: utk_cones_ret) {
+                delete(tmp.second);
+            }
+            cout << "The inflection radius is: " << rho << endl;
+        }
+
+        ad = clock();
+        cout << "Total time cost: " << fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << endl;
+        cout << "Total generated regions: " << avg_rt_cnt/w_num<<endl;
+        cout << "Total return regions: " << avg_rr_cnt/w_num<<endl;
+        for (float radius:avg_radius) {
+            cout<<radius/w_num<<endl;
+        }
+        auto now = chrono::steady_clock::now();
+        chrono::duration<double> elapsed_seconds= now-begin;
+        cout<<elapsed_seconds.count();
     }
     if (strcmp(methodName, "CS") == 0) // case study
     {
@@ -530,9 +607,6 @@ int main(const int argc, const char** argv)
         auto begin = chrono::steady_clock::now();
         for (int wi = 0; wi < w_num; wi++)
         {
-            if(wi!=w_num-1){ // choose a weight rather than running all
-                continue;
-            }
             auto w_begin = chrono::steady_clock::now();
             int k=ks[wi];
             // weight vector for testing, we should remove the redundant one
@@ -545,32 +619,34 @@ int main(const int argc, const char** argv)
             cout <<w.back()<< endl;
 //            void kskyband(const int dimen, Rtree& a_rtree, vector<long int>& kskyband, float* PG[], const int k)
             //get 1-skyband, fetch top m from them
-            vector<long> one_skyband;
-//            kskyband(dim, *rtree, one_skyband, PointSet, k);
-            kskyband(dim, *rtree, one_skyband, PointSet, 1);
+//            vector<long> one_skyband;
+////            kskyband(dim, *rtree, one_skyband, PointSet, k);
+//            kskyband(dim, *rtree, one_skyband, PointSet, 1);
+//
+//            map<int, int> do_cnt;
+//            for (int id:one_skyband) {
+//                do_cnt[id]=0;
+//            }
+//            for (int id: one_skyband) {
+//                for (int i = 1; i <= objCnt; ++i) {
+//                    if(i==id){
+//                        continue;
+//                    }
+//                    if(v1_dominate_v2(PointSet[id], PointSet[i], dim)){
+//                        do_cnt[id]++;
+//                    }
+//                }
+//            }
+//            sort(one_skyband.begin(), one_skyband.end(), [&do_cnt](int a, int b)->bool{
+//                return do_cnt[a] >do_cnt[b];
+//            });
+//            vector<int> skyline_topm(one_skyband.begin(), one_skyband.size()>=X?one_skyband.begin()+X:one_skyband.end());
 
-            map<int, int> do_cnt;
-            for (int id:one_skyband) {
-                do_cnt[id]=0;
-            }
-            for (int id: one_skyband) {
-                for (int i = 1; i <= objCnt; ++i) {
-                    if(i==id){
-                        continue;
-                    }
-                    if(v1_dominate_v2(PointSet[id], PointSet[i], dim)){
-                        do_cnt[id]++;
-                    }
-                }
-            }
-            sort(one_skyband.begin(), one_skyband.end(), [&do_cnt](int a, int b)->bool{
-                return do_cnt[a] >do_cnt[b];
-            });
-            vector<int> skyline_topm(one_skyband.begin(), one_skyband.size()>=X?one_skyband.begin()+X:one_skyband.end());
+            vector<int> skyline_topm=OSS_skyline(objCnt, X, rtree, PointSet, dim);
             set<int> sky_topm_s(skyline_topm.begin(), skyline_topm.end());
 
 
-            // fetch top-m diretly
+            // fetch top-m directly
             vector<int> all_id(objCnt);
             iota(all_id.begin(), all_id.end(), 1);
 //          computeTopK(const int dim, float* PG[], vector<int> &skyband, vector<float>& weight, int k)
@@ -581,6 +657,10 @@ int main(const int argc, const char** argv)
             vector<pair<long int, float>> interval;
             float rho = computeRho(dim, k, X, w, *rtree, PointSet, interval);
             cout<<"rho:"<<rho<<endl;
+//            unknown_x_baseline obj(dim, k, w, *rtree, PointSet);
+//            for (int i = 0; i < X; ++i) {
+//                interval.push_back(obj.get_next());
+//            }
             vector<int> ord_topm;
             for(pair<long int, float>&pi: interval){
                 ord_topm.push_back(pi.first);
@@ -620,25 +700,26 @@ int main(const int argc, const char** argv)
             int mins=min(skyline_topm.size(), ord_topm.size());
             cout<<"M1\n";
             for (int m:mv) {
-                cout<< dist(skyline_topm.begin(), skyline_topm.begin()+min(m, mins), ord_topm.begin(), ord_topm.begin()+min(m, mins))<<"\n";
+                cout << jaccard(skyline_topm.begin(), skyline_topm.begin() + min(m, mins), ord_topm.begin(),
+                                ord_topm.begin() + min(m, mins)) << "\n";
             }
             cout<<endl;
             // M2
             cout<<"M2\n";
             for (int m:mv) {
-                cout<< dist(skyline_topm.begin(), skyline_topm.begin()+m, oru_topm.begin(), oru_topm.begin()+m)<<"\n";
+                cout << jaccard(skyline_topm.begin(), skyline_topm.begin() + m, oru_topm.begin(), oru_topm.begin() + m) << "\n";
             }
             cout<<endl;
             // M3
             cout<<"M3\n";
             for (int m:mv) {
-                cout<< dist(direct_topm.begin(), direct_topm.begin()+m, ord_topm.begin(), ord_topm.begin()+m)<<"\n";
+                cout << jaccard(direct_topm.begin(), direct_topm.begin() + m, ord_topm.begin(), ord_topm.begin() + m) << "\n";
             }
             cout<<endl;
             // M4
             cout<<"M4\n";
             for (int m:mv) {
-                cout<< dist(direct_topm.begin(), direct_topm.begin()+m, oru_topm.begin(), oru_topm.begin()+m)<<"\n";
+                cout << jaccard(direct_topm.begin(), direct_topm.begin() + m, oru_topm.begin(), oru_topm.begin() + m) << "\n";
             }
             cout<<endl;
             cout<<"topm=[\n"<<direct_topm<<"\n]\n";
@@ -657,6 +738,290 @@ int main(const int argc, const char** argv)
         auto now = chrono::steady_clock::now();
         chrono::duration<double> elapsed_seconds= now-begin;
     }
+
+    if (strcmp(methodName, "CS2") == 0) // case study 2
+    {
+        at = clock();
+        auto begin = chrono::steady_clock::now();
+        vector<double> jas; // contains jaccard results
+        vector<double> pres; // contains precision results
+        vector<double> recs; // contains recall results
+        for (int wi = 0; wi < w_num; wi++)
+        {
+            int k=ks[wi];
+            // weight vector for testing, we should remove the redundant one
+            vector<float> w(ws[wi].begin(), ws[wi].end());
+            cout << "Testing w: ";
+            for (int di = 0; di < dim-1; di++)
+            {
+                cout << w[di] << ", ";
+            }
+            cout <<w.back()<< endl;
+
+
+            // fetch ORD top-m
+            vector<pair<long int, float>> interval;
+            float rho = computeRho(dim, k, X, w, *rtree, PointSet, interval);
+            cout<<"rho:"<<rho<<endl;
+            vector<int> ord_topm;
+            for(pair<long int, float>&pi: interval){
+                ord_topm.push_back(pi.first);
+            }
+            set<int> ord_topm_s(ord_topm.begin(), ord_topm.end());
+
+            // fetch ORU top-m
+            vector<pair<int, double>> utk_option_ret;
+            vector<pair<double, region*>> utk_cones_ret;
+//            int generated_r_cnt= utk_efficient_anti(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret);
+            int generated_r_cnt= utk_efficient(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret);
+            vector<int> oru_topm;
+            for(pair<int, double>&pi: utk_option_ret){
+                oru_topm.push_back(pi.first);
+            }
+            set<int> oru_topm_s(oru_topm.begin(), oru_topm.end());
+            double rho2 = utk_option_ret.back().second;
+
+            cout << "ORD top m size: " << ord_topm_s.size()<<endl;
+            cout<< "ORU top m size: "<<oru_topm_s.size()<<endl;
+
+            double ja=jaccard(oru_topm.begin(), oru_topm.end(), ord_topm.begin(),
+                              ord_topm.end());
+            jas.push_back(ja);
+            cout<<"jaccard:";
+            cout << ja << "\n";
+            cout<<endl;
+
+            double pre=precision(oru_topm.begin(), oru_topm.end(), ord_topm.begin(),
+                                 ord_topm.end());
+            pres.push_back(pre);
+            cout<<"precision:";
+            cout << pre << "\n";
+            cout<<endl;
+
+            double re=recall(oru_topm.begin(), oru_topm.end(), ord_topm.begin(),
+                             ord_topm.end());
+            recs.push_back(re);
+            cout<<"recall:";
+            cout << re << "\n";
+            cout<<endl;
+
+            cout<<endl;
+            cout<<"ord=[\n"<<ord_topm<<"\n]\n";
+            cout<<"oru=[\n"<<oru_topm<<"\n]\n";
+            for(int i:oru_topm){
+                for (int j = 0; j < dim; ++j) {
+                    cout<<PointSet[i][j]+SIDELEN<<" ";
+                }
+                cout<<endl;
+            }
+            for (pair<double, region*> &tmp: utk_cones_ret) {
+                delete(tmp.second);
+            }
+
+        }
+        auto now = chrono::steady_clock::now();
+        chrono::duration<double> elapsed_seconds= now-begin;
+        cout<<elapsed_seconds.count()<<endl;
+//        ofstream myfile;
+//        myfile.open ("cs2.txt", ios::out | ios::app | ios::binary);
+//        for (int l = 0; l < argc; ++l) {
+//            myfile<< argv[l]<<" ";
+//        }
+//        myfile<<endl;
+//        myfile<<"avg jaccard: ";
+//        myfile<< sum(jas.begin(), jas.end())/jas.size() <<"\n";
+//        myfile<<"avg precision: ";
+//        myfile<< sum(pres.begin(), pres.end())/pres.size() <<"\n";
+//        myfile<<"avg recall: ";
+//        myfile<< sum(recs.begin(), recs.end())/recs.size() <<"\n";
+//
+//        for(auto ja:jas){
+//            myfile<<ja<<" ";
+//        }
+//        myfile<<"\n";
+//
+//        for(auto pre:pres){
+//            myfile<<pre<<" ";
+//        }
+//        myfile<<"\n";
+//
+//        for(auto rec:recs){
+//            myfile<<rec<<" ";
+//        }
+//        myfile<<"\n";
+//
+//        myfile<<endl;
+//        myfile.close();
+    }
+
+    if (strcmp(methodName, "CS3") == 0) // case study3, see the change of rho_star with change of d
+    {
+        at = clock();
+        auto begin = chrono::steady_clock::now();
+        vector<double> rss;
+        for (int wi = 0; wi < w_num; wi++)
+        {
+            auto w_begin = chrono::steady_clock::now();
+            int k=ks[wi];
+            // weight vector for testing, we should remove the redundant one
+            vector<float> w(ws[wi].begin(), ws[wi].end());
+            cout << "Testing w: ";
+            for (int di = 0; di < dim-1; di++)
+            {
+                cout << w[di] << ", ";
+            }
+            cout <<w.back()<< endl;
+//            void kskyband(const int dimen, Rtree& a_rtree, vector<long int>& kskyband, float* PG[], const int k)
+            //get 1-skyband, fetch top m from them
+            vector<pair<int, double>> utk_option_ret;
+            vector<pair<double, region*>> utk_cones_ret;
+            double rho_star;
+            int generated_r_cnt= utk_efficient_cs3(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret, rho_star);
+            rss.push_back(rho_star);
+            for (pair<double, region*> &tmp: utk_cones_ret) {
+                delete(tmp.second);
+            }
+        }
+        cout<<"output rho_star begin"<<endl;
+        for(double rho:rss){
+            cout<<rho<<"\n";
+        }
+        cout<<"output rho_star end"<<endl;
+
+        ad = clock();
+        cout << "Total time cost: " << fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << endl;
+        cout << "Total generated regions: " << avg_rt_cnt/w_num<<endl;
+        cout << "Total return regions: " << avg_rr_cnt/w_num<<endl;
+        auto now = chrono::steady_clock::now();
+        chrono::duration<double> elapsed_seconds= now-begin;
+    }
+    if(strcmp(methodName, "CS4")==0)// CASE study 4, use for ORD boxplot
+    {
+        at = clock();
+        auto begin = chrono::steady_clock::now();
+        vector<double> rho_stars;
+//        vector<long> test;
+//        kskyband(dim, *rtree, test, PointSet, k);
+//        cout<<test.size()<<"test"<<endl;
+//        for(int id:test){
+//            vector<double> v(PointSet[id], PointSet[id]+dim);
+//            for(auto &i:v){
+//                i+=SIDELEN;
+//            }
+//            cout<<v<<endl;
+//        }
+        for (int wi = 0; wi < w_num; wi++)
+        {
+            vector<float> w(ws[wi].begin(), ws[wi].end());
+            vector<pair<long int, float>> interval;
+            computeRho(dim, k, X, w, *rtree, PointSet, interval, INFINITY);
+            rho_stars.push_back(interval.back().second);
+            cout<<interval.size()<<";"<<interval.back().second<<endl;
+        }
+        float rho_star=sum(rho_stars.begin(), rho_stars.end())/rho_stars.size();
+        vector<int> no_opt;
+        for (int wi = w_num; wi < w_num+w_num; wi++)
+        {
+            auto w_begin = chrono::steady_clock::now();
+            // weight vector for testing, we should remove the redundant one
+            vector<float> w(ws[wi].begin(), ws[wi].end());
+            cout << "Testing w: ";
+            cout<<w<<endl;
+            vector<pair<long int, float>> interval;
+            computeRho(dim, k, INFINITY, w, *rtree, PointSet, interval, rho_star);
+            no_opt.push_back(interval.size());
+//            for(auto &i:interval){
+//                cout<<i.first<<","<<i.second<<endl;
+//            }
+        }
+        cout<<"output no. of options begin"<<endl;
+        for(double no:no_opt){
+            cout<<no<<"\n";
+        }
+        cout<<"output no. of options end"<<endl;
+        cout<<"d=[";
+        for(double no:no_opt){
+            cout<<no<<",";
+        }
+        cout<<"]\n";
+        ad = clock();
+        cout << "Total time cost: " << fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << endl;
+        cout << "Total generated regions: " << avg_rt_cnt/w_num<<endl;
+        cout << "Total return regions: " << avg_rr_cnt/w_num<<endl;
+        auto now = chrono::steady_clock::now();
+        chrono::duration<double> elapsed_seconds= now-begin;
+    }
+    if (strcmp(methodName, "CS5") == 0) // ORU non order sensitive efficient
+    {
+        at = clock();
+        auto begin = chrono::steady_clock::now();
+        vector<double> avg_time(X);
+        vector<float> avg_radius(X, 0.0);
+        vector<double> rho_stars;
+        for (int wi = 0; wi < w_num; wi++){
+            vector<float> w=vector<float>(ws[wi].begin(), ws[wi].end());
+            vector<pair<int, double>> utk_option_ret;
+            vector<pair<double, region*>> utk_cones_ret;
+            non_order_utk_efficient(PointSet, dim, w, rtree, X, k, utk_option_ret,utk_cones_ret);
+            rho_stars.push_back(utk_option_ret.back().second);
+            cout<<"!:"<<utk_option_ret.size();
+        }
+        float rho_star=sum(rho_stars.begin(), rho_stars.end())/rho_stars.size();
+        vector<int> no_opt;
+        for (int wi = 2*w_num; wi < 3*w_num; wi++)
+        {
+            // weight vector for testing, we should remove the redundant one
+            vector<float> w=ws[wi];
+            cout << "Testing w: ";
+            cout<<w<<endl;
+            vector<pair<int, double>> utk_option_ret;
+            vector<pair<double, region*>> utk_cones_ret;
+            non_order_utk_efficient(PointSet, dim, w, rtree, INFINITY, k, utk_option_ret,utk_cones_ret, rho_star);
+            no_opt.push_back(utk_option_ret.size());
+            avg_rr_cnt+=utk_cones_ret.size();
+            cout<<"ret size: "<<utk_option_ret.size()<<"\n";
+            for (int i = 0; i < avg_radius.size(); ++i) {
+                if(i<utk_option_ret.size()){
+                    avg_radius[i]+=utk_option_ret[i].second;
+                }else{
+                    avg_radius[i]+=1000000;
+                }
+            }
+            for (float radius:avg_radius) {
+                cout<<radius/(wi+1)<<endl;
+            }
+            double rho = utk_option_ret.back().second;
+            for (pair<double, region*> &tmp: utk_cones_ret) {
+                delete(tmp.second);
+            }
+        }
+
+        ad = clock();
+        cout << "Total time cost: " << fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num) << " SEC " << endl;
+        cout << "Total generated regions: " << avg_rt_cnt/w_num<<endl;
+        cout << "Total return regions: " << avg_rr_cnt/w_num<<endl;
+//        for (float radius:avg_radius) {
+//            cout<<radius/w_num<<endl;
+//        }
+
+        cout<<"output no. of options begin"<<endl;
+        for(int no:no_opt){
+            cout<<no<<"\n";
+        }
+        cout<<"output no. of options end"<<endl;
+        cout<<"d=[";
+        for(int no:no_opt){
+            cout<<no<<",";
+        }
+        cout<<"]\n";
+        auto now = chrono::steady_clock::now();
+        chrono::duration<double> elapsed_seconds= now-begin;
+        cout<<elapsed_seconds.count();
+
+    }
+
+
+
     ofstream myfile;
     myfile.open ("result_oru.txt", ios::out | ios::app | ios::binary);
     myfile <<fixed << (ad - at) * 1.0 / (CLOCKS_PER_SEC*w_num)<<": ";
@@ -666,5 +1031,5 @@ int main(const int argc, const char** argv)
     }
     myfile<<endl;
     myfile.close();
-	return 0;
+    return 0;
 }
